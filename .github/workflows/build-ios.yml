@@ -1,0 +1,65 @@
+name: Build sing-box for iOS (NathanLR)
+
+on:
+  workflow_dispatch: # Позволяет запускать сборку вручную кнопкой
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22' # Укажите версию Go, требуемую для sing-box (обычно 1.21-1.23)
+          cache: true
+
+      - name: Build iOS Binary
+        run: |
+          # Задаем переменные окружения для кросс-компиляции под iOS
+          export GOOS=darwin
+          export GOARCH=arm64
+          export CGO_ENABLED=0
+          
+          # Компиляция основного бинарника с флагами оптимизации и тегами
+          go build -v -o sing-box-extended-ios \
+            -trimpath \
+            -ldflags "-s -w -X ://github.com" \
+            ./cmd/sing-box
+
+      - name: Prepare DEB Package Structure
+        run: |
+          # Создаем структуру папок для deb-пакета под rootless/NathanLR
+          # На NathanLR пути обычно маппятся в /var/jb
+          mkdir -p deb-package/var/jb/usr/bin
+          mkdir -p deb-package/DEBIAN
+          
+          # Переносим скомпилированный бинарник
+          cp sing-box-extended-ios deb-package/var/jb/usr/bin/sing-box
+          chmod +x deb-package/var/jb/usr/bin/sing-box
+
+          # Создаем файл контроля управления пакетом control
+          cat <<EOF > deb-package/DEBIAN/control
+          Package: org.sagernet.singbox.extended
+          Name: sing-box (Extended)
+          Version: 1.14.1-extended
+          Architecture: iphoneos-arm64
+          Description: The universal proxy platform with extended features.
+          Maintainer: Developer
+          Author: shtorm-7
+          Section: Utilities
+          Priority: optional
+          EOF
+
+      - name: Build DEB Package
+        run: |
+          # Собираем deb-пакет встроенными средствами Ubuntu
+          dpkg-deb --build --root-owner-group deb-package sing-box-extended-ios.deb
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sing-box-ios-deb
+          path: sing-box-extended-ios.deb
