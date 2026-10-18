@@ -3,18 +3,24 @@ name: Build sing-box for iOS (NathanLR)
 on:
   workflow_dispatch:
 
-# Явно даем права на чтение и запись контента для работы Git
 permissions:
   contents: write
 
 jobs:
   build:
-    runs-on: ubuntu-24.04 # Фиксируем стабильную версию ОС вместо ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Скачивает всю историю для корректной работы тегов и Git
+          fetch-depth: 1
+          submodules: false # Нам НЕ нужны сабмодули Git, Go сам скачает пакеты
+
+      - name: Remove broken submodules config if exists
+        run: |
+          # Полностью очищаем упоминания ломающих сборку сабмодулей из конфига git
+          rm -f .gitmodules
+          rm -rf .git/modules
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -28,6 +34,7 @@ jobs:
           export GOARCH=arm64
           export CGO_ENABLED=0
           
+          # Запуск сборки расширенной версии
           go build -v -o sing-box-extended-ios \
             -trimpath \
             -ldflags "-s -w -X ://github.com" \
